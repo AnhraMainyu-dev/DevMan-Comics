@@ -1,20 +1,23 @@
-import asyncio
 import random
+import time
 from pathlib import Path
 
 import requests
-import telegram
 from decouple import config
 
-TG_BOT_TOKEN = config("TG_BOT_TOKEN")
-TG_CHANNEL_ID = config("TG_CHANNEL_ID")
 FILENAME = "comic_to_send.png"
 SECONDS_IN_A_DAY = 86400
 
 
-async def send_image_to_tg(filename, tg_id, bot, caption):
+def send_image_to_tg(filename, tg_channel_id, tg_bot_token, caption):
+    url = f"https://api.telegram.org/bot{tg_bot_token}/sendPhoto"
     with open(filename, "rb") as image:
-        await bot.send_photo(chat_id=tg_id, photo=image, caption=caption)
+        response = requests.post(
+            url,
+            data={"chat_id": tg_channel_id, "caption": caption},
+            files={"photo": image},
+        )
+    response.raise_for_status()
 
 
 def save_image(url, filename):
@@ -28,8 +31,8 @@ def get_comics_amount():
     url = "https://xkcd.com/info.0.json"
     response = requests.get(url)
     response.raise_for_status()
-    comic_data = response.json()
-    return comic_data["num"]
+    comic = response.json()
+    return comic["num"]
 
 
 def get_random_comic():
@@ -38,28 +41,29 @@ def get_random_comic():
     url = f"https://xkcd.com/{comic_number}/info.0.json"
     response = requests.get(url)
     response.raise_for_status()
-    comic_data = response.json()
-    return comic_data
+    comic = response.json()
+    return comic
 
 
-async def publish_random_comic(bot):
-    comic_data = get_random_comic()
-    comic_img_url = comic_data["img"]
-    comic_comment = comic_data["alt"]
-    save_image(comic_img_url, FILENAME)
-    await send_image_to_tg(FILENAME, TG_CHANNEL_ID, bot, comic_comment)
-    Path(FILENAME).unlink()
+def publish_random_comic(tg_bot_token, tg_channel_id, filename):
+    comic = get_random_comic()
+    save_image(comic["img"], filename)
+    try:
+        send_image_to_tg(filename, tg_channel_id, tg_bot_token, comic["alt"])
+    finally:
+        Path(filename).unlink(missing_ok=True)
 
 
-async def publish_comics_daily():
-    bot = telegram.Bot(token=TG_BOT_TOKEN)
+def publish_comics_daily(tg_bot_token, tg_channel_id, filename, delay):
     while True:
-        await publish_random_comic(bot)
-        await asyncio.sleep(SECONDS_IN_A_DAY)
+        publish_random_comic(tg_bot_token, tg_channel_id, filename)
+        time.sleep(delay)
 
 
 def main():
-    asyncio.run(publish_comics_daily())
+    tg_bot_token = config("TG_BOT_TOKEN")
+    tg_channel_id = config("TG_CHANNEL_ID")
+    publish_comics_daily(tg_bot_token, tg_channel_id, FILENAME, SECONDS_IN_A_DAY)
 
 
 if __name__ == "__main__":

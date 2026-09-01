@@ -45,25 +45,17 @@ def get_random_comic():
     return comic
 
 
-def publish_random_comic(tg_bot_token, tg_channel_id, filename):
-    comic = get_random_comic()
-    save_image(comic["img"], filename)
-    try:
-        send_image_to_tg(filename, tg_channel_id, tg_bot_token, comic["alt"])
-    finally:
-        Path(filename).unlink(missing_ok=True)
-
-
-def publish_comics_daily(tg_bot_token, tg_channel_id, filename, delay):
-    while True:
-        publish_random_comic(tg_bot_token, tg_channel_id, filename)
-        time.sleep(delay)
-
-
 def main():
     tg_bot_token = config("TG_BOT_TOKEN")
     tg_channel_id = config("TG_CHANNEL_ID")
-    publish_comics_daily(tg_bot_token, tg_channel_id, FILENAME, SECONDS_IN_A_DAY)
+    while True:
+        comic = get_random_comic()
+        save_image(comic["img"], FILENAME)
+        try:
+            send_image_to_tg(FILENAME, tg_channel_id, tg_bot_token, comic["alt"])
+        finally:
+            Path(FILENAME).unlink(missing_ok=True)
+    time.sleep(SECONDS_IN_A_DAY)
 
 
 if __name__ == "__main__":
